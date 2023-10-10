@@ -75,7 +75,7 @@ def load_questions(questions):
         Returns a dictionary (key: unit number (as string); value: array of unit numbers)
     """
     questions_dict = {}
-    with open(questions) as f:
+    with open(questions, encoding="utf-8") as f:
         for row in f.readlines():
             row = row.replace('\n', '')
             vals = row.split(", ")
