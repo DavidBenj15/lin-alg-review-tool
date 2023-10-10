@@ -3,7 +3,6 @@ import os
 import re
 import time
 import PyPDF2
-import pandas as pd
 from colorama import Fore, Back, Style
 
 class Unit:
@@ -18,8 +17,10 @@ class Unit:
 def main():
     """ Main function. Calls helper functions. """
     reader = load_textbook()
-    # all_questions = load_questions()
-    units = scan_for_units(reader)
+    questions_dict = load_questions("questions.txt") #Dictionary (key: unit number (str);
+    #value: array of questions (int[]))
+    units = scan_for_units(reader, questions_dict)
+
 
 def load_textbook():
     """Prompts user to select textbook. Returns reader."""
@@ -40,12 +41,10 @@ def load_textbook():
     # open selected pdf
 
 
-def scan_for_units(reader):
+def scan_for_units(reader, questions_dict):
     """ Searches pdf for keyword.
         For each keyword, creates a Unit class containing first page of unit & unit number.
     """
-    # TODO: Pass in "all_questions" as a parameter once "load_questions()" functionality
-    # is implemented.
     units = []
     search_keyword = r"EXERCISES \d+\.\d+" # Excercises + any number with decimal
 
@@ -57,25 +56,34 @@ def scan_for_units(reader):
             page_num = index + 1
             unit_num = res_search.group()[10:]
             try:
-                unit_num = float(unit_num)
+                unit_num = str(unit_num)
             except ValueError:
-                print("VALUE ERROR: converting unit num to float for Unit", unit_num)
-            questions = ...
-            print("UNIT NUMBER:", unit_num)
-            print("PAGE:", page_num)
-            print()
+                print("VALUE ERROR: converting unit num to str for Unit", unit_num)
+            questions = questions_dict.get(unit_num, None) #If no questions for unit, questions=None
+            if questions is None:
+                break
             unit = Unit(unit_num, page_num, questions)
+            print(unit.unit_num, unit.page, unit.questions)
             units.append(unit)
     print("Scan complete.")
     return units
 
 
-def load_questions():
+def load_questions(questions):
     """ Prompts user to select CSV file containing the questions for each unit.
         Parses the questions.
-        Returnsa list containing lists of questions for each unit.
+        Returns a dictionary (key: unit number (as string); value: array of unit numbers)
     """
-    df = pd.read_csv
-
+    questions_dict = {}
+    with open(questions) as f:
+        for row in f.readlines():
+            row = row.replace('\n', '')
+            vals = row.split(", ")
+            unit_num = vals[0] #Type: string
+            questions_dict[str(unit_num)] = list(map(int, vals[1:])) #Assigns dictionary values 
+            #to list of integers
+            # print("UNIT NUM:", unit_num)
+            # print("Qs:", questions_dict[unit_num])        
+    return questions_dict
 
 main()
