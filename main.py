@@ -4,7 +4,7 @@ import re
 import time
 import random
 import fitz
-from PIL import Image
+from PIL import Image, ImageDraw
 import PyPDF2
 from colorama import Fore, Back, Style
 import pdfplumber
@@ -127,6 +127,7 @@ def prompt_for_generation(file_name, units):
             if user_in.lower() == "y":
                 question_data = generate_question(file_name, units)
                 extract_image(question_data)
+                draw_box(question_data[3], question_data[4]) #question_data[3] = image out file path; ...[4] = buffer dict
             elif user_in.lower() == 'n':
                 break
             else:
@@ -171,14 +172,35 @@ def generate_question(file_name, units):
 
     BUFFER_TOP = 20
     BUFFER_BOTTOM = 500
-    BUFFER_LEFT = 10
+    BUFFER_LEFT = 20
     BUFFER_RIGHT = 250
+    #TODO: refactor into a dictionary.
     data = [file_name,
             page_index,
             (left - BUFFER_LEFT, top - BUFFER_TOP,
                     left + BUFFER_RIGHT, top + BUFFER_BOTTOM),
-            "generated question.png"
+            "generated question.png",
+            {
+                "buffer_top": BUFFER_TOP,
+                "buffer_bottom": BUFFER_BOTTOM,
+                "buffer_left": BUFFER_LEFT,
+                "buffer_right": BUFFER_RIGHT
+            }
             ]
     return data
+
+
+def draw_box(file_path, buffer_dict):
+    """Draws a red box around given question."""
+    BOX_WIDTH = 40
+    top = buffer_dict["buffer_top"] * (3 / 2)
+    left = buffer_dict["buffer_left"] * (3 / 2)
+    bottom = top + BOX_WIDTH
+    right = left + BOX_WIDTH
+
+    image = Image.open(file_path)
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((left, top, right, bottom), outline="red", width=3)
+    image.save(file_path)
 
 main()
