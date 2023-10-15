@@ -1,4 +1,4 @@
-# textbook-scanner
-Study tool that chooses a random exercise from a textbook for user to complete.
--Prompts user to select textbook in current directory
--Scans through textbook to find the locations of different units
+# Textbook Scanner
+
+A Python study tool that prompts users to enter a textbook and a list of questions, generates a random problem based on these questions, and outputs an image of the question.
+
