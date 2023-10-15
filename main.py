@@ -25,12 +25,12 @@ class Unit:
 
 def main():
     """ Main function. Calls helper functions. """
-    pdf_file_name = load_textbook()
-    reader = PyPDF2.PdfReader(pdf_file_name)
+    pdf_file_path = load_textbook()
+    reader = PyPDF2.PdfReader(pdf_file_path)
     questions_dict = load_questions() #Dictionary (key: unit number (str);
     #value: array of questions (int[]))
     units = scan_for_units(reader, questions_dict)
-    prompt_for_generation(pdf_file_name, units)
+    prompt_for_generation(pdf_file_path, units)
 
 def load_textbook():
     """Prompts user to select textbook. Returns file name."""
@@ -46,8 +46,8 @@ def load_textbook():
             print(Back.RED + "Please enter valid integer (Ex: 0). " + Style.RESET_ALL)
             time.sleep(1)
 
-    file_name = file_array[file_index]
-    return file_name
+    file_path = file_array[file_index]
+    return file_path
 
 
 def scan_for_units(reader, questions_dict):
@@ -57,7 +57,10 @@ def scan_for_units(reader, questions_dict):
     units = []
     search_keyword = r"EXERCISES \d+\.\d+" # Excercises + any number with decimal
 
-    # search for string in pages
+    units_found = 0
+    units_to_find = len(questions_dict)
+
+    # Search for "search_keyword" in phrases
     for index, page in enumerate(reader.pages):
         text = page.extract_text()
         res_search = re.search(search_keyword, text)
@@ -69,10 +72,13 @@ def scan_for_units(reader, questions_dict):
             except ValueError:
                 print("VALUE ERROR: converting unit num to str for Unit", unit_num)
             questions = questions_dict.get(unit_num, None) #If no questions for unit, questions=None
-            if questions is None:
-                break
-            unit = Unit(unit_num, page_num, questions)
-            units.append(unit)
+            if questions is not None:
+                unit = Unit(unit_num, page_num, questions)
+                units.append(unit)
+                units_found += 1
+                if units_found == units_to_find:
+                    #Stop searching if all units int input file are found.
+                    break
     print("Scan complete.")
     return units
 
@@ -94,40 +100,44 @@ def load_questions():
             print(Back.RED + "Please enter valid integer (Ex: 0). " + Style.RESET_ALL)
             time.sleep(1)
 
-    file_name = file_array[file_index]
+    file_path = file_array[file_index]
 
     questions_dict = {}
-    with open(file_name, encoding="utf-8") as f:
+    with open(file_path, encoding="utf-8") as f:
         for row in f.readlines():
             row = row.replace('\n', '')
             vals = row.split(", ")
             unit_num = vals[0] #Type: string
-            questions_dict[str(unit_num)] = list(map(int, vals[1:])) #Assigns dictionary values 
-            #to list of integers  
+            questions_dict[str(unit_num)] = list(map(int, vals[1:])) #Assigns dictionary values
+            #to list of integers
     return questions_dict
 
 
-def extract_image(data):
+def extract_image(file_path, data, bbox):
     """ Outputs an image of the randomly generated problem.
         Assumes "data" input array is in the correct order.
     """
-    file, page_num, bbox, image_path = data[0], data[1], data[2], data[3]
-    pdf = fitz.open(file)
+    page_num, image_path = data["page_index"], data["IMAGE_PATH"]
+    pdf = fitz.open(file_path)
     page = pdf[page_num]
     pixmap = page.get_pixmap(matrix=fitz.Matrix(1, 1).prescale(2, 2), clip=bbox)
     image = Image.frombytes("RGB", [pixmap.width, pixmap.height], pixmap.samples)
     image.save(image_path)
 
 
-def prompt_for_generation(file_name, units):
+def prompt_for_generation(file_path, units):
     """Gets user input [y/n]. If user enters 'y', generate a problem and output an image."""
     while True:
         try:
             user_in = str(input(Fore.LIGHTYELLOW_EX + "Generate question?[y/n] " + Style.RESET_ALL))
             if user_in.lower() == "y":
-                question_data = generate_question(file_name, units)
-                extract_image(question_data)
-                draw_box(question_data[3], question_data[4]) #question_data[3] = image out file path; ...[4] = buffer dict
+                q_data = generate_question(file_path, units)
+                bbox = (q_data["left"] - q_data["buffer_left"],
+                        q_data["top"] - q_data["buffer_top"],
+                        q_data["left"] + q_data["buffer_right"],
+                        q_data["top"] + q_data["buffer_bottom"])
+                extract_image(file_path, q_data, bbox)
+                draw_box(q_data)
             elif user_in.lower() == 'n':
                 break
             else:
@@ -136,7 +146,7 @@ def prompt_for_generation(file_name, units):
             print("Please enter either 'y' or 'n'.")
 
 
-def generate_question(file_name, units):
+def generate_question(file_path, units):
     """ Chooses a random question from a random unit.
         Returns an array containing the file name,
         page index (page # - 1), bbox encapsulating the question,
@@ -148,12 +158,11 @@ def generate_question(file_name, units):
     first_page = unit.page
     last_page = first_page + PAGE_RANGE
     question = unit.random_question()
-    print(unit.unit_num, first_page, question)
 
     left, top = None, None
     page_index = None
 
-    with pdfplumber.open(file_name) as pdf:
+    with pdfplumber.open(file_path) as pdf:
         break_out_flag = False
         for i in range(first_page - 1, last_page - 1):
             page = pdf.pages[i]
@@ -162,7 +171,7 @@ def generate_question(file_name, units):
                     left = element['x0']
                     top = element['top']
                     page_index = i
-                    print("Question", question, "found on page", page_index)
+                    print("Unit", unit.unit_num, "question", question, "on page", page_index + 1)
                     break_out_flag = True #signals program to break out of nested loop
                     break
                 elif left is None and i is last_page - 1:
@@ -171,36 +180,36 @@ def generate_question(file_name, units):
                 break
 
     BUFFER_TOP = 20
-    BUFFER_BOTTOM = 500
+    BUFFER_BOTTOM = 100
     BUFFER_LEFT = 20
     BUFFER_RIGHT = 250
-    #TODO: refactor into a dictionary.
-    data = [file_name,
-            page_index,
-            (left - BUFFER_LEFT, top - BUFFER_TOP,
-                    left + BUFFER_RIGHT, top + BUFFER_BOTTOM),
-            "generated question.png",
-            {
-                "buffer_top": BUFFER_TOP,
-                "buffer_bottom": BUFFER_BOTTOM,
-                "buffer_left": BUFFER_LEFT,
-                "buffer_right": BUFFER_RIGHT
-            }
-            ]
+
+    data = {
+        "IMAGE_PATH": "generated question.png",
+        "page_index": page_index,
+        "left": left,
+        "top": top,
+        "buffer_top": BUFFER_TOP,
+        "buffer_bottom": BUFFER_BOTTOM,
+        "buffer_left": BUFFER_LEFT,
+        "buffer_right": BUFFER_RIGHT
+    }
     return data
 
 
-def draw_box(file_path, buffer_dict):
+def draw_box(q_data):
     """Draws a red box around given question."""
     BOX_WIDTH = 40
-    top = buffer_dict["buffer_top"] * (3 / 2)
-    left = buffer_dict["buffer_left"] * (3 / 2)
+    image_path = q_data["IMAGE_PATH"]
+    left = 30
+    top = 30
     bottom = top + BOX_WIDTH
     right = left + BOX_WIDTH
 
-    image = Image.open(file_path)
+    image = Image.open(image_path)
     draw = ImageDraw.Draw(image)
+
     draw.rectangle((left, top, right, bottom), outline="red", width=3)
-    image.save(file_path)
+    image.save(image_path)
 
 main()
