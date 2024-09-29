@@ -91,7 +91,7 @@ def load_questions():
     file_array = os.listdir()
     while True:
         for index, file in enumerate(file_array):
-            if file.endswith(".txt"):
+            if file.endswith(".txt") and file != "requirements.txt":
                 print(f'[{index}]: {file}')
         try:
             file_index = int(input(Fore.LIGHTYELLOW_EX + "Enter questions file index: " + Style.RESET_ALL))
@@ -185,7 +185,7 @@ def generate_question(file_path, units):
     BUFFER_RIGHT = 250
 
     data = {
-        "IMAGE_PATH": "generated question.png",
+        "IMAGE_PATH": "generated_question.png",
         "page_index": page_index,
         "left": left,
         "top": top,
